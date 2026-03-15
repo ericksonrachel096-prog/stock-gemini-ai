@@ -3,6 +3,8 @@ import hashlib
 import xmltodict
 import requests
 import json
+import tushare as ts
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
@@ -23,30 +25,74 @@ GEMINI_MODEL = "gemini-2.0-flash"  # 日常用flash，深度分析可换gemini-2
 STOCK_API_KEY = os.getenv("STOCK_API_KEY")
 STOCK_API_URL = "https://www.alphavantage.co/query"
 
+# 新增：Tushare A股数据源初始化
+TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN")
+ts.set_token(TUSHARE_TOKEN)
+tushare_pro = ts.pro_api()
+
 # 微信配置
 WECHAT_TOKEN = os.getenv("WECHAT_TOKEN")
 
-# -------------------------- 股票数据获取与预测核心逻辑 --------------------------
+# -------------------------- 双数据源智能获取行情数据 --------------------------
 def get_stock_data(stock_code: str):
-    """获取股票/基金实时行情与历史数据"""
-    params = {
-        "function": "TIME_SERIES_DAILY",
-        "symbol": stock_code,
-        "apikey": STOCK_API_KEY,
-        "outputsize": "compact"
-    }
-    try:
-        response = requests.get(STOCK_API_URL, params=params, timeout=10)
-        if response.status_code != 200:
+    """
+    智能适配双数据源：
+    - A股代码（600/000/300/688开头）自动用Tushare获取
+    - 美股/港股/其他标的自动用Alpha Vantage获取
+    """
+    # 匹配A股代码规则
+    a_stock_prefix = ("600", "000", "300", "688", "001", "002", "003", "301", "601", "603", "605")
+    
+    # A股行情获取逻辑
+    if stock_code.startswith(a_stock_prefix):
+        try:
+            # 补全Tushare要求的交易所后缀
+            if stock_code.startswith(("600", "688", "601", "603", "605")):
+                ts_code = f"{stock_code}.SH"
+            else:
+                ts_code = f"{stock_code}.SZ"
+            
+            # 获取最近1年的日线行情数据
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+            
+            # 调用Tushare接口
+            df = tushare_pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            if df.empty:
+                return None
+            
+            # 转换为字典格式，完美兼容原有的Gemini分析逻辑
+            return {
+                "标的代码": stock_code,
+                "交易所": "上交所" if ".SH" in ts_code else "深交所",
+                "最近交易日": df.iloc[0]["trade_date"],
+                "最新收盘价": df.iloc[0]["close"],
+                "当日涨跌幅": f"{df.iloc[0]['pct_chg']}%",
+                "近1年行情数据": df.to_dict(orient="records")
+            }
+        except Exception as e:
+            print(f"Tushare A股数据获取失败：{e}")
             return None
-        data = response.json()
-        # 过滤无效数据
-        if "Time Series (Daily)" not in data:
+    
+    # 美股/其他标的 原Alpha Vantage获取逻辑
+    else:
+        try:
+            params = {
+                "function": "TIME_SERIES_DAILY",
+                "symbol": stock_code,
+                "apikey": STOCK_API_KEY,
+                "outputsize": "compact"
+            }
+            response = requests.get(STOCK_API_URL, params=params, timeout=10)
+            if response.status_code != 200:
+                return None
+            data = response.json()
+            if "Time Series (Daily)" not in data:
+                return None
+            return data
+        except Exception as e:
+            print(f"Alpha Vantage数据获取失败：{e}")
             return None
-        return data
-    except Exception as e:
-        print(f"获取行情数据失败：{e}")
-        return None
 
 def gemini_stock_analysis(stock_code: str, stock_data: dict):
     """调用Gemini生成股票/基金预测分析报告"""
@@ -100,7 +146,7 @@ async def wechat_message(request: Request):
     content = msg_dict.get("Content", "").strip()
 
     # 默认回复
-    reply_content = "欢迎使用股票基金预测AI助手\n发送格式：股票/基金代码+预测\n例：000001 预测"
+    reply_content = "欢迎使用股票基金预测AI助手\n发送格式：股票/基金代码+预测\n例：600000 预测"
 
     # 处理用户预测请求
     if "预测" in content and len(content.split()) >= 1:
