@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI股票预测助手</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        body { background-color: #f5f7fa; padding: 20px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+        .container { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 600px; padding: 30px; }
+        h1 { color: #1f2937; font-size: 24px; margin-bottom: 20px; text-align: center; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 16px; outline: none; transition: border-color 0.2s; }
+        input:focus { border-color: #3b82f6; }
+        button { padding: 12px 24px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.2s; white-space: nowrap; }
+        button:hover { background-color: #2563eb; }
+        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .result-box { margin-top: 20px; padding: 20px; background-color: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; white-space: pre-wrap; line-height: 1.6; color: #374151; }
+        .loading { text-align: center; color: #6b7280; margin-top: 20px; }
+        .disclaimer { margin-top: 20px; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦞 AI股票预测助手</h1>
+        <div class="input-group">
+            <input type="text" id="stockCode" placeholder="输入股票代码，例如：600000 或 AAPL">
+            <button id="predictBtn" onclick="predict()">预测分析</button>
+        </div>
+        <div id="loading" class="loading" style="display: none;">正在调用AI分析，请稍候...</div>
+        <div id="result" class="result-box" style="display: none;"></div>
+        <div class="disclaimer">
+            ⚠️ 免责声明：本AI分析仅供参考，不构成任何投资建议。股市有风险，投资需谨慎。
+        </div>
+    </div>
+
+    <script>
+        async function predict() {
+            const stockCode = document.getElementById('stockCode').value.trim();
+            if (!stockCode) {
+                alert('请输入股票代码！');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const resultBox = document.getElementById('result');
+            const predictBtn = document.getElementById('predictBtn');
+
+            // 显示加载状态
+            loading.style.display = 'block';
+            resultBox.style.display = 'none';
+            predictBtn.disabled = true;
+
+            try {
+                // 调用后端的预测接口（复用你之前的逻辑）
+                // 注意：这里我们模拟一个简单的调用，你可以根据实际后端接口调整
+                // 如果你后端有专门的预测API，把下面的fetch地址改成你的API路径
+                const response = await fetch('/wechat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: stockCode + ' 预测' })
+                });
+
+                // 这里根据你后端的实际返回格式调整解析逻辑
+                // 假设后端返回的是纯文本分析结果
+                let resultText;
+                try {
+                    const data = await response.json();
+                    resultText = data.reply || data.message || JSON.stringify(data);
+                } catch (e) {
+                    resultText = await response.text();
+                }
+
+                // 显示结果
+                resultBox.textContent = resultText;
+                resultBox.style.display = 'block';
+            } catch (error) {
+                resultBox.textContent = '调用失败，请检查网络或稍后再试。错误信息：' + error.message;
+                resultBox.style.display = 'block';
+            } finally {
+                // 隐藏加载状态
+                loading.style.display = 'none';
+                predictBtn.disabled = false;
+            }
+        }
+
+        // 支持回车触发预测
+        document.getElementById('stockCode').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                predict();
+            }
+        });
+    </script>
+</body>
+</html>
