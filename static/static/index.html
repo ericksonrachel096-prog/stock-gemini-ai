@@ -34,7 +34,7 @@
         </div>
     </div>
 
-    <script>
+        <script>
         async function predict() {
             const stockCode = document.getElementById('stockCode').value.trim();
             if (!stockCode) {
@@ -52,30 +52,25 @@
             predictBtn.disabled = true;
 
             try {
-                // 调用后端的预测接口（复用你之前的逻辑）
-                // 注意：这里我们模拟一个简单的调用，你可以根据实际后端接口调整
-                // 如果你后端有专门的预测API，把下面的fetch地址改成你的API路径
-                const response = await fetch('/wechat', {
+                // 修正：调用 main.py 里专门的网页端接口 /api/predict
+                const response = await fetch('/api/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: stockCode + ' 预测' })
+                    body: JSON.stringify({ stock_code: stockCode })
                 });
 
-                // 这里根据你后端的实际返回格式调整解析逻辑
-                // 假设后端返回的是纯文本分析结果
-                let resultText;
-                try {
-                    const data = await response.json();
-                    resultText = data.reply || data.message || JSON.stringify(data);
-                } catch (e) {
-                    resultText = await response.text();
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // 成功：显示 AI 分析结果
+                    resultBox.textContent = data.result;
+                } else {
+                    // 失败：显示错误信息
+                    resultBox.textContent = '❌ ' + data.message;
                 }
-
-                // 显示结果
-                resultBox.textContent = resultText;
                 resultBox.style.display = 'block';
             } catch (error) {
-                resultBox.textContent = '调用失败，请检查网络或稍后再试。错误信息：' + error.message;
+                resultBox.textContent = '调用失败，请检查服务是否启动或稍后再试。错误信息：' + error.message;
                 resultBox.style.display = 'block';
             } finally {
                 // 隐藏加载状态
